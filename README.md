@@ -1,156 +1,135 @@
-# 🍃 Leaf-ID
+#  LEAF ID
 
-<div align="center">
+**LEAF ID** is a deep-learning leaf recognition tool built on an **EfficientNet-B0** architecture. It was trained across a wide, real-world collection of leaves — from common fruit trees and garden vegetables to traditional medicinal and ornamental plants — so it can tell one species from another at a glance, and catch early signs of disease for select species.
 
-![Leaf-ID Banner](https://img.shields.io/badge/Leaf--ID-Plant%20Species%20Recognition-success?style=for-the-badge&logo=leaf&logoColor=white&labelColor=2ea44f&color=4CAF50)
+ **Live demo:** [huggingface.co/spaces/ranaumarbilal31/leafid](https://huggingface.co/spaces/ranaumarbilal31/leafid)
 
-**An AI-powered leaf identification system that classifies plant species from leaf images using deep learning.**
-
-[![Python](https://img.shields.io/badge/Python-3.8+-blue?style=flat-square&logo=python&logoColor=white)](https://python.org)
-[![TensorFlow](https://img.shields.io/badge/TensorFlow-2.x-orange?style=flat-square&logo=tensorflow&logoColor=white)](https://tensorflow.org)
-[![Keras](https://img.shields.io/badge/Keras-2.x-red?style=flat-square&logo=keras&logoColor=white)](https://keras.io)
-[![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
-[![Issues](https://img.shields.io/github/issues/ranaumarbilal31/Leaf-ID?style=flat-square)](https://github.com/ranaumarbilal31/Leaf-ID/issues)
-
-</div>
+![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?logo=streamlit&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
 
-##  -About the Project
+##  Overview
 
-**Leaf-ID** is a deep learning–based computer vision project designed to **identify plant species** from images of their leaves. By leveraging convolutional neural networks (CNNs), the system analyzes leaf shape, texture, and venation patterns to classify them into their respective plant species.
+Point your camera at a leaf — LEAF ID tells you the species, and for select species, whether it's showing signs of disease.
 
-This project has applications in:
--  **Botany & agriculture** — rapid plant identification in the field
--  **Ecology & conservation** — biodiversity monitoring
--  **Education** — helping students and enthusiasts learn about flora
--  **Pharmaceuticals** — identifying medicinal plants
-
----
-
-##  Features
-
-| Feature | Description |
-|---------|-------------|
-| 🔍 **Image Classification** | Classifies leaf images into multiple plant species |
-| 🧠 **Deep CNN Model** | Built with TensorFlow / Keras for high accuracy |
-| 📷 **Image Preprocessing** | Resizing, normalization, and augmentation pipeline |
-| 🌐 **Web Interface** | Upload a leaf image and get instant predictions |
-| 📊 **Visualization** | Training curves, confusion matrix, and sample predictions |
+- **Total Classes:** 84
+- **Disease Labels:** 11
+- **Architecture:** EfficientNet-B0 (transfer learning)
+- **Framework:** PyTorch + torchvision
+- **Interface:** Streamlit
 
 ---
 
-## 🛠️ Tech Stack
+##  Model
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
-  <img src="https://img.shields.io/badge/TensorFlow-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Keras-D00000?style=for-the-badge&logo=keras&logoColor=white"/>
-  <img src="https://img.shields.io/badge/NumPy-013243?style=for-the-badge&logo=numpy&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Matplotlib-11557C?style=for-the-badge&logo=matplotlib&logoColor=white"/>
-  <img src="https://img.shields.io/badge/OpenCV-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Scikit--learn-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Jupyter-F37626?style=for-the-badge&logo=jupyter&logoColor=white"/>
-</p>
+LEAF ID fine-tunes an **EfficientNet-B0** backbone (pretrained on ImageNet) on a combined dataset of plant leaf images, classifying into 84 species categories, 11 of which also carry disease-status labels.
+
+The trained model weights are provided as [`LeadID.pt`](./LeadID.pt), and the full training process — data loading, augmentation, fine-tuning, and evaluation — is documented in the included Jupyter notebook.
 
 ---
+
+##  Dataset
+
+This project combines three public Kaggle datasets:
+
+| Dataset | Link |
+|---|---|
+| 48 Plant Leaves Datasets | [kaggle.com/datasets/developerzulkarnain/48-plant-leaves-datasets](https://www.kaggle.com/datasets/developerzulkarnain/48-plant-leaves-datasets) |
+| Plant Leaf Dataset | [kaggle.com/datasets/mahaninghubballi/plant-leaf-dataset](https://www.kaggle.com/datasets/mahaninghubballi/plant-leaf-dataset) |
+| Plant Leaves for Image Classification | [kaggle.com/datasets/csafrit2/plant-leaves-for-image-classification](https://www.kaggle.com/datasets/csafrit2/plant-leaves-for-image-classification) |
+
+You can download all three programmatically using [`kagglehub`](https://github.com/Kaggle/kagglehub):
+
+```python
+import kagglehub
+
+d1 = kagglehub.dataset_download("developerzulkarnain/48-plant-leaves-datasets")
+d2 = kagglehub.dataset_download("mahaninghubballi/plant-leaf-dataset")
+d3 = kagglehub.dataset_download("csafrit2/plant-leaves-for-image-classification")
+```
+
+All rights to the underlying image data belong to their respective dataset authors on Kaggle — please review each dataset's license before reuse.
+
+---
+
+## 📁 Repository Structure
+
+```
+Leaf-ID/
+├── app.py                 # Streamlit web app
+├── LeadID.pt               # Trained EfficientNet-B0 model weights
+├── class_names.json       # Mapping of class indices to species/disease labels
+├── requirements.txt       # Python dependencies
+├── training_notebook.ipynb # Model training & evaluation notebook
+├── LICENSE
+└── README.md
+```
 
 ##  Installation
-
-### 1️⃣ Clone the repository
 
 ```bash
 git clone https://github.com/ranaumarbilal31/Leaf-ID.git
 cd Leaf-ID
-```
-
-### 2️⃣ Create a virtual environment (recommended)
-
-```bash
-python -m venv venv
-source venv/bin/activate        # On Linux/macOS
-# venv\Scripts\activate         # On Windows
-```
-
-### 3️⃣ Install dependencies
-
-```bash
 pip install -r requirements.txt
-```
-
-### 4️⃣ Simply Run
-```bash
 streamlit run app.py
 ```
 
-
 ---
-## 🧠 Model Architecture
 
-The model is a **Convolutional Neural Network (CNN)** built with Keras' Sequential API:
+## How to  Use:
 
-```
-┌─────────────────────────────────────┐
-│  Input Layer  (224 × 224 × 3)       │
-├─────────────────────────────────────┤
-│  Conv2D + ReLU  →  MaxPooling2D     │
-│  Conv2D + ReLU  →  MaxPooling2D     │
-│  Conv2D + ReLU  →  MaxPooling2D     │
-│  Conv2D + ReLU  →  MaxPooling2D     │
-├─────────────────────────────────────┤
-│  Flatten                            │
-│  Dense + ReLU  →  Dropout           │
-│  Dense + ReLU  →  Dropout           │
-│  Dense + Softmax  (num_classes)     │
-└─────────────────────────────────────┘
-```
-
-- **Optimizer:** Adam
-- **Loss:** Categorical Cross-Entropy
-- **Metrics:** Accuracy, Precision, Recall
+1. Launch the app with `streamlit run app.py` (or use the [hosted demo](https://huggingface.co/spaces/ranaumarbilal31/leafid)).
+2. Upload a JPG or PNG image of a single leaf.
+3. LEAF ID returns the predicted species and, for supported species, a disease-status prediction with confidence scores.
 
 ---
 
-##  Results
+##  Training
 
-| Metric          | Value   |
-|-----------------|---------|
-| ✅ Training Accuracy     | ~ 98 %  |
-| ✅ Validation Accuracy   | ~ 94 %  |
-| ✅ Test Accuracy         | ~ 93 %  |
-| 📉 Training Loss         | ~ 0.04  |
-| 📉 Validation Loss       | ~ 0.18  |
+The full training pipeline — dataset merging, preprocessing, augmentation, EfficientNet-B0 fine-tuning, and evaluation — is available in the training notebook included in this repo. Open it in Jupyter or Google Colab to reproduce or extend the model.
 
 ---
 
-## 🤝 Contributing
+##  Tech Stack
 
-Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
-1. 🍴 Fork the project
-2. 🌿 Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. 💾 Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. 📤 Push to the branch (`git push origin feature/AmazingFeature`)
-5. 📬 Open a Pull Request
-
-Please make sure to update tests as appropriate and follow the existing code style.
+- **PyTorch** / **torchvision** — model architecture & inference
+- **EfficientNet-B0** — backbone architecture
+- **Streamlit** — web interface
+- **Pillow / NumPy / Pandas** — image and data handling
+- **Kaggle / kagglehub** — dataset sourcing
 
 ---
 
-## 📄 License
+##  Contributing
 
-Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more information.
+Contributions are welcome! To contribute:
+
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Commit your changes
+4. Open a pull request
 
 ---
 
-## 📧 Contact
+##  License
+
+This project is licensed under the [MIT License](./LICENSE).
+
+---
+##  Contact and Acknowledgements
 
 **Rana Umar Bilal**  
 🔗 GitHub: [@ranaumarbilal31](https://github.com/ranaumarbilal31)
 
  **Mian Zaid**  
 🔗 GitHub: [@zaid-mian](https://github.com/https://github.com/zaid-mian) 
+
+
+- Dataset authors on Kaggle (see [Dataset](#-dataset) section above)
+- EfficientNet authors (Tan & Le, 2019)
 
 ---
 
@@ -161,4 +140,4 @@ Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more informa
 <sub>Built with Love and a lot of Hardwork</sub>
 
 </div>
-```
+
