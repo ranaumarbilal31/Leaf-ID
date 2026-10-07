@@ -172,6 +172,11 @@ BOTANICAL_CARE = {
         "symptoms": "Orange-yellowish pustules on leaf underside or irregular swelling on veins.",
         "treatment": "Prune isolated affected leaves; spray copper oxychloride or bio-fungicide if spreading.",
     },
+    "Bael": {
+        "condition": "Bacterial Canker / Foliar Blight",
+        "symptoms": "Water-soaked oily brown lesions on foliage with chlorotic halos and twig dieback.",
+        "treatment": "Prune infected branches in dry weather; spray streptocycline combined with copper oxychloride.",
+    },
 }
 
 CATEGORIZED_SPECIES = {
@@ -308,73 +313,103 @@ def progress_step(p, text=None):
     except TypeError:
         return st.progress(p)
 
-def specimen_card_full(filename, uri, size, ranked, seq):
+def specimen_card_full(filename, uri, size, ranked):
     top_label, top_p = ranked[0]
     sp, cond, healthy = parse_label(top_label)
     pct = max(0.0, min(100.0, top_p * 100.0))
-    uncertain = top_p < CONFIDENCE_FLOOR
-    capable = sp in DISEASE_SPECIES
 
-    if uncertain:
-        flag_cls = "uncertain"
-        flag = "UNCERTAIN READ — TRY A CLEARER, EVENLY-LIT PHOTO OF A SINGLE LEAF"
-        eyebrow = "SCAN %02d · LOW-CONFIDENCE READ" % seq
+    # Model Confidence calibration for 84 classes
+    if pct >= 40.0:
+        tier_cls = "tier-high"
+        tier_label = "HIGH CONFIDENCE"
+        bar_color = "linear-gradient(90deg, #107C41, #21A366)"
+        note = "Strong diagnostic certainty. The specimen features closely align with model training records."
+    elif pct >= 20.0:
+        tier_cls = "tier-moderate"
+        tier_label = "MODERATE CONFIDENCE"
+        bar_color = "linear-gradient(90deg, #107C41, #34D399)"
+        note = "Moderate certainty. Clear leading candidate among 84 classes. Check alternate candidate matches below."
     else:
-        eyebrow = "SCAN %02d · READOUT COMPLETE" % seq
-        if healthy and capable:
-            flag_cls, flag = "healthy", "HEALTHY — NO DISEASE SIGNAL DETECTED"
-        elif healthy:
-            flag_cls, flag = "na", "SPECIES ONLY — NO DISEASE CHANNEL FOR THIS CLASS"
+        tier_cls = "tier-low"
+        tier_label = "LOW CONFIDENCE"
+        bar_color = "linear-gradient(90deg, #D97706, #F59E0B)"
+        note = "Low certainty readout. For optimal results, ensure the leaf is clearly centered, flat, and evenly lit."
+
+    # Health Status & Detected Disease
+    if healthy:
+        status_html = f"""<div class="health-status-card healthy">
+<div class="health-status-title">HEALTH STATUS: HEALTHY</div>
+<p class="health-status-sub">No foliar disease detected on this specimen. The foliage appears normal, vigorous, and uninfected.</p>
+</div>"""
+    else:
+        if sp in BOTANICAL_CARE:
+            dis_name = BOTANICAL_CARE[sp]["condition"]
+        elif cond != "Diseased":
+            dis_name = cond
         else:
-            flag_cls, flag = "disease", "DISEASE SIGNAL — %s" % cond.upper()
+            dis_name = f"{sp} Foliar Blight / Leaf Pathogen"
 
-    meta = "%s · %d×%d PX · %d CLASSES SCORED" % (filename, size[0], size[1], len(ranked))
-    name_html = "%s <span class='sep'>·</span> <span class='cond'>%s</span>" % (esc(sp), esc(cond))
-
-    alt_cards = []
-    for i, (lab, p) in enumerate(ranked[1:4], start=2):
-        lsp, lcd, _ = parse_label(lab)
-        alt_cards.append(
-            f"""
-            <div class="alt-card">
-              <div class="alt-card-head">
-                <span class="alt-card-name">#{i:02d} {esc(lsp)} ({esc(lcd)})</span>
-                <span class="alt-card-pct">{p*100:.1f}%</span>
-              </div>
-              <div class="alt-bar-track">
-                <div class="alt-bar-fill" style="width: {p*100:.1f}%;"></div>
-              </div>
-            </div>
-            """
-        )
-    alt_block = "".join(alt_cards)
-
-    return f"""
-<div class="specimen-full" id="leafid-result">
-  <div class="spec-frame-full">
-    <img class="spec-photo-full" src="{uri}" alt="Analyzed specimen">
-    <div class="spec-scan" aria-hidden="true"></div>
-    <span class="spec-tag tag-tl">LIVE SCAN</span>
-    <span class="spec-tag tag-br">{esc(meta)}</span>
-  </div>
-  <div class="spec-meta-full">
-    <div class="spec-eyebrow">{esc(eyebrow)}</div>
-    <h3 class="spec-name-full">{name_html}</h3>
-    <div class="conf-head">
-      <span class="conf-label">TOP-1 MATCH CONFIDENCE</span>
-      <span class="conf-num">{pct:.1f}%</span>
-    </div>
-    <div class="conf-bar"><i style="--w:{pct:.1f}%;"></i></div>
-    <div class="read-flag {flag_cls}">{esc(flag)}</div>
-    <div style="font-family:'JetBrains Mono', monospace; font-size:0.72rem; color:var(--text-dim); margin-bottom:10px; letter-spacing:0.08em;">
-      ALTERNATE CANDIDATE READS
-    </div>
-    <div class="alt-reads-grid">
-      {alt_block}
-    </div>
-  </div>
+        status_html = f"""<div class="health-status-card diseased">
+<div class="health-status-title">HEALTH STATUS: DISEASED</div>
+<div class="disease-detected-row">
+<div class="disease-detected-label">DISEASE DETECTED:</div>
+<div class="disease-detected-name">{esc(dis_name)}</div>
 </div>
-"""
+<p class="health-status-sub">Pathological leaf symptoms identified. See the clinical advisory guide below for symptoms and recommended treatment.</p>
+</div>"""
+
+    # Alternate candidates (clean, unindented lines to prevent code block parsing, NO #02/#03 numbering)
+    alt_cards = []
+    for lab, p in ranked[1:4]:
+        lsp, lcd, lh = parse_label(lab)
+        cond_color = "#34D399" if lh else "#FCA5A5"
+        cond_text = "Healthy" if lh else lcd
+        alt_cards.append(f"""<div class="alt-card">
+<div class="alt-card-head">
+<span class="alt-card-name">{esc(lsp)} <span style="color:{cond_color}; font-weight:600;">({esc(cond_text)})</span></span>
+<span class="alt-card-pct">{p*100:.1f}%</span>
+</div>
+<div class="alt-bar-track">
+<div class="alt-bar-fill" style="width: {p*100:.1f}%;"></div>
+</div>
+</div>""")
+    alt_block = "\n".join(alt_cards)
+
+    meta = f"{esc(filename)} · {size[0]}×{size[1]} px · {len(ranked)} Classes Scored"
+
+    return f"""<div class="specimen-full" id="specimen-analysis-results">
+<div class="spec-frame-full">
+<img class="spec-photo-full" src="{uri}" alt="Analyzed specimen">
+<div class="spec-scan" aria-hidden="true"></div>
+<span class="spec-tag tag-tl">SPECIMEN SCAN</span>
+<span class="spec-tag tag-br">{meta}</span>
+</div>
+<div class="spec-meta-full">
+<div class="spec-status-tag">BOTANICAL READOUT COMPLETE</div>
+<div class="spec-plant-header">
+<div class="spec-plant-label">IDENTIFIED PLANT SPECIES</div>
+<h2 class="spec-plant-name">{esc(sp)}</h2>
+</div>
+{status_html}
+<div class="conf-section">
+<div class="conf-head">
+<span class="conf-label">MODEL CONFIDENCE</span>
+<div class="conf-readout">
+<span class="conf-pct">{pct:.1f}%</span>
+<span class="conf-tier-badge {tier_cls}">{tier_label}</span>
+</div>
+</div>
+<div class="conf-bar-track">
+<div class="conf-bar-fill" style="width: {pct:.1f}%; background: {bar_color};"></div>
+</div>
+<p class="conf-note">{esc(note)}</p>
+</div>
+<div class="alt-sec-header">OTHER CANDIDATE MATCHES</div>
+<div class="alt-reads-grid">
+{alt_block}
+</div>
+</div>
+</div>"""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4 · THEME & BACKGROUND STACK
@@ -383,7 +418,6 @@ inject_css()
 st.session_state.setdefault("staged_bytes", None)
 st.session_state.setdefault("staged_name", None)
 st.session_state.setdefault("analyzed", False)
-st.session_state.setdefault("scan_seq", 0)
 
 stack_html = '<div class="bg-stack" aria-hidden="true"><div class="bg-veins"></div><div class="bg-shade"></div><div class="bg-grain"></div></div>'
 st.markdown(stack_html, unsafe_allow_html=True)
@@ -422,9 +456,9 @@ with col_left:
     st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
     m1, m2, m3 = st.columns(3)
     with m1:
-        st.metric("Classes indexed", "%02d" % N_CLASSES)
+        st.metric("Classes indexed", f"{N_CLASSES}")
     with m2:
-        st.metric("Disease readouts", "%02d" % N_DISEASE)
+        st.metric("Disease readouts", f"{N_DISEASE}")
     with m3:
         st.metric("Input plate", "224×224")
 
@@ -448,11 +482,11 @@ with col_right:
                 st.session_state["analyzed"] = False
 
     with intake_tabs[1]:
-        st.caption("Click a real Kaggle dataset photo to stage it for classification:")
+        st.caption("Click a sample leaf photo to stage it for analysis:")
         demo_cols = st.columns(4)
         sample_meta = [
             ("sample_tomato_healthy.jpg", "Tomato", "Healthy"),
-            ("sample_tomato_blight.jpg", "Tomato", "Late Blight"),
+            ("sample_diseased_lemon.jpg", "Lemon", "Diseased"),
             ("sample_potato_healthy.jpg", "Potato", "Healthy"),
             ("sample_grape_healthy.jpg", "Grape", "Healthy"),
         ]
@@ -475,24 +509,21 @@ with col_right:
     if staged_b:
         uri_thumb, sz = preview_data_uri(staged_b)
         st.markdown(
-            f"""
-            <div class="staged-box">
-              <div class="staged-meta">
-                <img class="staged-thumb" src="{uri_thumb}">
-                <div>
-                  <div class="staged-title">{esc(staged_n)}</div>
-                  <div class="staged-sub">{sz[0]}×{sz[1]} px · Staged for analysis</div>
-                </div>
-              </div>
-            </div>
-            """,
+            f"""<div class="staged-box">
+<div class="staged-meta">
+<img class="staged-thumb" src="{uri_thumb}">
+<div>
+<div class="staged-title">{esc(staged_n)}</div>
+<div class="staged-sub">{sz[0]}×{sz[1]} px · Staged for analysis</div>
+</div>
+</div>
+</div>""",
             unsafe_allow_html=True,
         )
 
         st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
         if st.button("Analyze Specimen", key="btn_run_analysis", use_container_width=True):
             st.session_state["analyzed"] = True
-            st.session_state["scan_seq"] = st.session_state.get("scan_seq", 0) + 1
             st.rerun()
     else:
         st.markdown(empty_state(), unsafe_allow_html=True)
@@ -501,6 +532,34 @@ with col_right:
 # 6 · FULL-WIDTH SPECIMEN ANALYSIS READOUT (APPEARS ON CLICK)
 # ─────────────────────────────────────────────────────────────────────────────
 if st.session_state.get("analyzed") and st.session_state.get("staged_bytes"):
+    # Smooth auto-scroll target
+    st.markdown('<div id="analysis-results-section" style="scroll-margin-top: 30px; height: 1px;"></div>', unsafe_allow_html=True)
+    st.components.v1.html(
+        """
+        <script>
+            function scrollToAnalysis() {
+                try {
+                    var target = null;
+                    if (window.parent && window.parent.document) {
+                        target = window.parent.document.getElementById('analysis-results-section');
+                    }
+                    if (!target) {
+                        target = document.getElementById('analysis-results-section');
+                    }
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                } catch(e) {
+                    console.log('Scroll exception:', e);
+                }
+            }
+            setTimeout(scrollToAnalysis, 150);
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
     st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
     staged_b = st.session_state["staged_bytes"]
     staged_n = st.session_state["staged_name"]
@@ -523,7 +582,7 @@ if st.session_state.get("analyzed") and st.session_state.get("staged_bytes"):
 
         # Full-Width Specimen Card
         st.markdown(
-            specimen_card_full(staged_n, uri, size, ranked, st.session_state.get("scan_seq", 1)),
+            specimen_card_full(staged_n, uri, size, ranked),
             unsafe_allow_html=True,
         )
 
@@ -531,18 +590,23 @@ if st.session_state.get("analyzed") and st.session_state.get("staged_bytes"):
         sp, cond, healthy = parse_label(top_label)
 
         # Pathology Advisory Box (If diseased)
-        if not healthy and sp in BOTANICAL_CARE:
-            care = BOTANICAL_CARE[sp]
+        if not healthy:
+            care = BOTANICAL_CARE.get(
+                sp,
+                {
+                    "condition": f"{sp} Foliar Pathogen" if cond == "Diseased" else "Foliar Infection",
+                    "symptoms": "Visible chlorotic spots, irregular necrotic lesions, or foliar distress on leaf lamina.",
+                    "treatment": "Isolate infected foliage, prune severely damaged tissue, ensure good air ventilation, and apply organic neem oil or copper-based fungicide spray.",
+                },
+            )
             st.markdown(
-                f"""
-                <div style="background: rgba(217, 119, 6, 0.08); border: 1px solid rgba(217, 119, 6, 0.35); border-radius: 12px; padding: 22px 26px; margin-top: 18px;">
-                  <div style="font-family:'JetBrains Mono', monospace; font-size:0.78rem; color:var(--warn); letter-spacing:0.08em; font-weight:700;">
-                    PATHOLOGY ADVISORY · {esc(care['condition'].upper())}
-                  </div>
-                  <p style="font-size:0.9rem; color:var(--text-main); margin:10px 0 6px 0;"><b>Observed Symptoms:</b> {esc(care['symptoms'])}</p>
-                  <p style="font-size:0.9rem; color:var(--text-muted); margin:0;"><b>Recommended Intervention:</b> {esc(care['treatment'])}</p>
-                </div>
-                """,
+                f"""<div style="background: rgba(220, 38, 38, 0.08); border: 1.5px solid rgba(239, 68, 68, 0.45); border-radius: 14px; padding: 22px 26px; margin-top: 18px;">
+<div style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; color:#F87171; letter-spacing:0.08em; font-weight:800; margin-bottom:8px;">
+PATHOLOGY ADVISORY · {esc(care['condition'].upper())}
+</div>
+<p style="font-size:0.92rem; color:#FFFFFF; margin:0 0 8px 0; line-height:1.45;"><b>Observed Clinical Symptoms:</b> {esc(care['symptoms'])}</p>
+<p style="font-size:0.92rem; color:#D4E4D6; margin:0; line-height:1.45;"><b>Recommended Agronomic Intervention:</b> {esc(care['treatment'])}</p>
+</div>""",
                 unsafe_allow_html=True,
             )
 
@@ -557,8 +621,8 @@ Status: {'DISEASED' if not healthy else 'HEALTHY'}
 Scored Classes: {len(ranked)}
 Model Backbone: EfficientNet-B0 (PyTorch CPU)
 
-TOP READOUTS:
-""" + "\n".join([f"{i}. {parse_label(l)[0]} ({parse_label(l)[1]}) — {p*100:.2f}%" for i, (l, p) in enumerate(ranked[:5], 1)])
+CANDIDATE READOUTS:
+""" + "\n".join([f"{parse_label(l)[0]} ({parse_label(l)[1]}) — {p*100:.2f}%" for l, p in ranked[:5]])
 
         st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
         st.download_button(

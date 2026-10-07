@@ -356,112 +356,215 @@ div.stButton > button:hover {
   padding: 28px 32px;
 }
 
-.spec-eyebrow {
+.spec-status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--excel-accent);
+  background: rgba(33, 163, 102, 0.12);
+  border: 1px solid rgba(33, 163, 102, 0.35);
+  padding: 5px 14px;
+  border-radius: 9999px;
+  margin-bottom: 12px;
+}
+
+.spec-plant-header {
+  margin-bottom: 16px;
+}
+
+.spec-plant-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.spec-plant-name {
+  font-size: 2.3rem;
+  font-weight: 800;
+  color: #FFFFFF;
+  margin: 0;
+  line-height: 1.15;
+}
+
+/* Health Status Cards (Healthy vs Diseased) */
+.health-status-card {
+  padding: 18px 22px;
+  border-radius: var(--radius-md);
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.health-status-card.healthy {
+  background: rgba(16, 124, 65, 0.16);
+  border: 1.5px solid var(--excel-green);
+}
+
+.health-status-card.diseased {
+  background: rgba(220, 38, 38, 0.14);
+  border: 1.5px solid #EF4444;
+}
+
+.health-status-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.health-status-card.healthy .health-status-title {
+  color: #34D399;
+}
+
+.health-status-card.diseased .health-status-title {
+  color: #F87171;
+}
+
+.disease-detected-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0 2px 0;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid #EF4444;
+}
+
+.disease-detected-label {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.74rem;
-  letter-spacing: 0.1em;
-  color: var(--text-dim);
-  margin-bottom: 6px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #FCA5A5;
 }
 
-.spec-name-full {
-  font-size: 2.1rem;
+.disease-detected-name {
+  font-size: 1.25rem;
   font-weight: 800;
-  color: var(--text-main);
-  margin: 0 0 16px 0;
+  color: #FFFFFF;
 }
 
-.spec-name-full .sep {
-  color: var(--text-dim);
-  margin: 0 6px;
+.health-status-sub {
+  font-size: 0.92rem;
+  color: #E2EBE2;
+  margin: 0;
+  line-height: 1.45;
 }
 
-.spec-name-full .cond {
-  color: var(--excel-accent);
+/* Model Confidence Section */
+.conf-section {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  margin-bottom: 22px;
 }
 
 .conf-head {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 6px;
+  align-items: center;
+  margin-bottom: 10px;
 }
 
 .conf-label {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.74rem;
+  font-size: 0.88rem;
+  font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: #FFFFFF;
 }
 
-.conf-num {
+.conf-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.conf-pct {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 1.4rem;
-  font-weight: 700;
+  font-size: 1.55rem;
+  font-weight: 800;
   color: var(--excel-accent);
 }
 
-.conf-bar {
+.conf-tier-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  letter-spacing: 0.04em;
+}
+
+.tier-high {
+  background: rgba(33, 163, 102, 0.2);
+  border: 1px solid var(--excel-accent);
+  color: #34D399;
+}
+
+.tier-moderate {
+  background: rgba(217, 119, 6, 0.2);
+  border: 1px solid var(--warn);
+  color: #FBBF24;
+}
+
+.tier-low {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid var(--danger);
+  color: #F87171;
+}
+
+.conf-bar-track {
+  width: 100%;
+  height: 13px;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 9999px;
-  height: 9px;
   overflow: hidden;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.conf-bar i {
-  display: block;
+.conf-bar-fill {
   height: 100%;
-  width: var(--w, 0%);
-  background: linear-gradient(90deg, var(--excel-green), var(--excel-accent));
   border-radius: 9999px;
-  box-shadow: 0 0 12px rgba(33, 163, 102, 0.4);
-  transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.read-flag {
-  display: flex;
-  align-items: center;
-  padding: 11px 16px;
-  border-radius: var(--radius-sm);
+.conf-note {
+  font-size: 0.88rem;
+  color: #C3D4C5;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Alternate candidates */
+.alt-sec-header {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  margin-bottom: 22px;
-}
-
-.read-flag.healthy {
-  background: var(--success-bg);
-  border: 1px solid var(--excel-green);
-  color: var(--excel-accent);
-}
-
-.read-flag.disease {
-  background: var(--warn-bg);
-  border: 1px solid var(--warn);
-  color: var(--warn);
-}
-
-.read-flag.uncertain {
-  background: rgba(156, 163, 175, 0.1);
-  border: 1px solid #9CA3AF;
-  color: #D1D5DB;
-}
-
-.read-flag.na {
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid #6366F1;
-  color: #A5B4FC;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
 }
 
 .alt-reads-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
-  border-top: 1px solid var(--line);
-  padding-top: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 8px;
 }
 
 .alt-card {
@@ -474,24 +577,26 @@ div.stButton > button:hover {
 .alt-card-head {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 0.84rem;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .alt-card-name {
   font-weight: 600;
-  color: var(--text-main);
+  color: #FFFFFF;
 }
 
 .alt-card-pct {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
+  font-weight: 700;
   color: var(--excel-accent);
 }
 
 .alt-bar-track {
   width: 100%;
-  height: 5px;
+  height: 6px;
   background: rgba(255, 255, 255, 0.06);
   border-radius: 9999px;
   overflow: hidden;
@@ -499,7 +604,7 @@ div.stButton > button:hover {
 
 .alt-bar-fill {
   height: 100%;
-  background: var(--excel-green);
+  background: var(--excel-accent);
   border-radius: 9999px;
 }
 
