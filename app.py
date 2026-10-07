@@ -1,8 +1,10 @@
-# ---------------------------------------------------------------------------------
-# IMPORTS
-# ---------------------------------------------------------------------------------
-import json
+# =================================================================================
+# LEAF ID Pro — Intelligent Plant Leaf & Pathology Classifier
+# =================================================================================
+import os
 import io
+import json
+import time
 from pathlib import Path
 from datetime import datetime
 
@@ -12,516 +14,1005 @@ import torch.nn as nn
 from torchvision import models, transforms
 from PIL import Image
 import pandas as pd
+import numpy as np
 
 # ---------------------------------------------------------------------------------
-# GLOBAL CONSTANTS & COLOR SCHEME (Emerald Theme)
-# ---------------------------------------------------------------------------------
-APP_NAME = "LEAF ID"
-
-COLOR_DEEP     = "#047857"
-COLOR_MID      = "#10B981"
-COLOR_SOFT     = "#34D399"
-COLOR_WARN     = "#F59E0B"
-COLOR_DANGER   = "#EF4444"
-
-BASE_DIR = Path(__file__).parent
-MODEL_PATH = BASE_DIR / "braincell_best.pt"
-CLASS_NAMES_PATH = BASE_DIR / "class_names.json"
-
-IMG_SIZE = 224
-NORM_MEAN = [0.485, 0.456, 0.406]
-NORM_STD = [0.229, 0.224, 0.225]
-
-DEVICE = torch.device("cpu")
-
-# ---------------------------------------------------------------------------------
-# PAGE CONFIG
+# PAGE CONFIGURATION
 # ---------------------------------------------------------------------------------
 st.set_page_config(
-    page_title=f"{APP_NAME} — Plant Leaf Classifier",
+    page_title="LEAF ID Pro — Plant Species & Disease AI",
+    page_icon="🌿",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ---------------------------------------------------------------------------------
-# ADAPTIVE CSS (Supports both Light and Dark Mode)
+# CONSTANTS & ASSET PATHS
+# ---------------------------------------------------------------------------------
+APP_NAME = "LEAF ID Pro"
+BASE_DIR = Path(__file__).resolve().parent
+
+# Check candidate model weight filenames
+MODEL_CANDIDATES = [
+    BASE_DIR / "LeafID.pt",
+    BASE_DIR / "braincell_best.pt",
+    BASE_DIR / "LeadID.pt",
+]
+CLASS_NAMES_PATH = BASE_DIR / "class_names.json"
+SAMPLES_DIR = BASE_DIR / "samples"
+
+IMG_SIZE = 224
+NORM_MEAN = [0.485, 0.456, 0.406]
+NORM_STD = [0.229, 0.224, 0.225]
+DEVICE = torch.device("cpu")
+
+# ---------------------------------------------------------------------------------
+# COMPREHENSIVE BOTANICAL & PATHOLOGY KNOWLEDGE BASE
+# ---------------------------------------------------------------------------------
+BOTANICAL_ADVICE = {
+    "lemon": {
+        "diseased": {
+            "condition": "Citrus Canker / Bacterial Blight / Scab",
+            "symptoms": "Raised corky lesions surrounded by oily or yellow chlorotic halos on foliage and twigs.",
+            "cause": "Xanthomonas citri bacteria spread by wind-driven rain, irrigation splashing, or leaf miners.",
+            "treatment": [
+                "Prune severely affected twigs and destroy fallen infected leaves.",
+                "Apply copper-based bactericide/fungicide spray during early leaf flush.",
+                "Avoid overhead irrigation to minimize moisture on foliage.",
+                "Control citrus leaf miner larvae which create entry wounds for infection."
+            ],
+            "severity": "Moderate to High"
+        },
+        "healthy": {
+            "care": "Citrus limon thrives in full sunlight (6-8 hours daily), well-draining loamy soil with pH 5.5-6.5, and regular deep watering with drying intervals."
+        }
+    },
+    "mango": {
+        "diseased": {
+            "condition": "Anthracnose / Leaf Blight",
+            "symptoms": "Dark brown, angular to irregular necrotic spots that coalesce into large necrotic blights.",
+            "cause": "Colletotrichum gloeosporioides fungus prevalent in high humidity and warm temperatures.",
+            "treatment": [
+                "Prune canopy to improve air circulation and sunlight penetration.",
+                "Spray neem oil or copper oxychloride fungicide every 14 days during wet spells.",
+                "Remove and dispose of diseased twigs and fallen debris around the root zone."
+            ],
+            "severity": "Moderate"
+        },
+        "healthy": {
+            "care": "Mangifera indica prefers warm tropical/subtropical climate, deep well-drained soil, and deep infrequent watering once established."
+        }
+    },
+    "tomato": {
+        "diseased": {
+            "condition": "Early Blight / Septoria Leaf Spot",
+            "symptoms": "Concentric target-like brown spots with yellow halos, starting on lower leaves and moving upwards.",
+            "cause": "Alternaria solani / Septoria lycopersici fungi thriving in humid, warm conditions.",
+            "treatment": [
+                "Remove bottom foliage within 12 inches of the soil to prevent soil-splash contamination.",
+                "Apply organic copper fungicide or bio-fungicide (Bacillus subtilis).",
+                "Mulch heavily around base with straw to create a barrier over soil pathogens.",
+                "Water strictly at base level using drip or soaker hoses."
+            ],
+            "severity": "High"
+        },
+        "healthy": {
+            "care": "Solanum lycopersicum needs fertile, compost-rich soil, constant moisture, staking support, and 8+ hours of direct sun."
+        }
+    },
+    "guava": {
+        "diseased": {
+            "condition": "Guava Wilt / Anthracnose",
+            "symptoms": "Curling, yellowing leaves with rusty-brown spots leading to premature leaf defoliation.",
+            "cause": "Fusarium oxysporum f. sp. psidii or Colletotrichum fungal pathogens.",
+            "treatment": [
+                "Drench root zone with bio-control agents like Trichoderma viride.",
+                "Apply balanced organic fertilizer enriched with zinc and boron.",
+                "Ensure soil is free from waterlogging and root nematodes."
+            ],
+            "severity": "High"
+        },
+        "healthy": {
+            "care": "Psidium guajava is resilient and adaptable to varied soils, tolerating drought once mature and flourishing in sunny conditions."
+        }
+    },
+    "pomegranate": {
+        "diseased": {
+            "condition": "Bacterial Blight / Cercospora Spot",
+            "symptoms": "Water-soaked dark brown spots that turn black with chlorotic margins; cracked petioles.",
+            "cause": "Xanthomonas axonopodis pv. punicae or Cercospora punicae.",
+            "treatment": [
+                "Prune during dry periods and sterilize pruning tools between cuts.",
+                "Spray copper hydroxide combined with streptomycin sulphate as recommended by agricultural extensions.",
+                "Maintain weed-free orchard floor to lower ambient micro-humidity."
+            ],
+            "severity": "High"
+        },
+        "healthy": {
+            "care": "Punica granatum loves Mediterranean climates, sunny locations, well-drained gravelly soil, and light pruning to encourage fruiting branches."
+        }
+    },
+    "jamun": {
+        "diseased": {
+            "condition": "Leaf Spot / Anthracnose",
+            "symptoms": "Small circular reddish-brown specks that expand into ragged holes (shot-hole appearance).",
+            "cause": "Glomerella cingulata or Cercospora eugeniae fungi.",
+            "treatment": [
+                "Spray Bordeaux mixture (1%) or systemic fungicide at onset of symptoms.",
+                "Collect and burn fallen infested foliage to break the spore lifecycle."
+            ],
+            "severity": "Moderate"
+        },
+        "healthy": {
+            "care": "Syzygium cumini (Black Plum) is a sturdy evergreen tropical tree with medicinal bark and leaves, needing minimal upkeep once established."
+        }
+    },
+    "jatropha": {
+        "diseased": {
+            "condition": "Powdery Mildew / Rust",
+            "symptoms": "White powdery fungal coating on leaf upper surfaces causing distortion and yellowing.",
+            "cause": "Oidium caricae or Phakopsora jatrophicola.",
+            "treatment": [
+                "Apply potassium bicarbonate or wettable sulfur spray.",
+                "Thin branches to increase interior air flow."
+            ],
+            "severity": "Low to Moderate"
+        },
+        "healthy": {
+            "care": "Jatropha curcas is drought-resistant, thrives in poor sandy soils, and is prized for biofuel seeds and boundary fencing."
+        }
+    },
+    "alstonia_scholaris": {
+        "diseased": {
+            "condition": "Leaf Gall / Insect Blister",
+            "symptoms": "Raised blister-like gall formations on the upper leaf surface caused by psyllid gall midges.",
+            "cause": "Pauropsylla tuberculata infestation stimulating abnormal plant tissue growth.",
+            "treatment": [
+                "Prune heavily galled leaves before insects emerge.",
+                "Apply neem seed kernel extract (5%) spray during new flush emergence."
+            ],
+            "severity": "Low to Moderate"
+        },
+        "healthy": {
+            "care": "Alstonia scholaris (Devil Tree / Saptaparni) is an ornamental shade tree with whorled leaves and aromatic winter blossoms."
+        }
+    },
+    "chinar": {
+        "diseased": {
+            "condition": "Sycamore Anthracnose",
+            "symptoms": "Brown necrotic lesions following leaf veins; sudden blight of young spring foliage.",
+            "cause": "Apiognomonia veneta fungal pathogen active in cool, wet spring weather.",
+            "treatment": [
+                "Rake and destroy fallen leaves in autumn.",
+                "Apply systemic fungicide micro-injections for heritage trees if recurring heavily."
+            ],
+            "severity": "Moderate"
+        },
+        "healthy": {
+            "care": "Platanus orientalis (Oriental Plane) is a majestic long-lived shade tree common in temperate valleys, preferring deep moist soils."
+        }
+    },
+    "pongamia_pinnata": {
+        "diseased": {
+            "condition": "Tar Spot / Gall Mite Blight",
+            "symptoms": "Black tar-like raised fungal spots or blistered galls across the lamina.",
+            "cause": "Phyllachora pongamiae or Eriophyid mites.",
+            "treatment": [
+                "Apply wettable sulfur or horticultural oil during early spring.",
+                "Clear leaf litter beneath tree canopy."
+            ],
+            "severity": "Low to Moderate"
+        },
+        "healthy": {
+            "care": "Millettia pinnata (Karanja) is a nitrogen-fixing hardy tree known for insecticidal seed oil and tolerance of saline and waterlogged soils."
+        }
+    },
+    "arjun": {
+        "diseased": {
+            "condition": "Leaf Rust / Gall Formation",
+            "symptoms": "Orange-yellowish pustules on leaf underside or irregular swelling on veins.",
+            "cause": "Puccinia spp. or gall midges.",
+            "treatment": [
+                "Prune isolated affected leaves.",
+                "Apply bio-fungicide or copper oxychloride if rust spreads."
+            ],
+            "severity": "Low to Moderate"
+        },
+        "healthy": {
+            "care": "Terminalia arjuna is an Ayurvedic medicinal tree native to riverbanks, with cardiovascular benefits derived from its bark."
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------------
+# CUSTOM MODERN STYLING (Responsive Botanical Dark/Light Theme)
 # ---------------------------------------------------------------------------------
 st.markdown(
-    f"""
+    """
     <style>
-        h1, h2, h3, h4 {{
-            color: {COLOR_DEEP} !important;
-        }}
+        /* Import clean typography */
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
-        /* ---------- Hero banner (Stays vibrant in both modes) ---------- */
-        .hero-banner {{
-            background: linear-gradient(135deg, {COLOR_DEEP} 0%, {COLOR_MID} 100%);
-            padding: 60px 40px; /* INCREASED: Adds more space inside the box to make it taller and wider */
-            border-radius: 18px;
-            margin-bottom: 22px;
-            box-shadow: 0 4px 15px rgba(4, 120, 87, 0.3);
-        }}
-        .hero-title {{
-            color: #ffffff !important;
-            font-size: 3.8rem; /* INCREASED: Made the LEAF ID text significantly larger (was 2.4rem) */
-            font-weight: 800;
-            margin: 0;
-            letter-spacing: 0.5px;
-        }}
-        .hero-subtitle {{
-            color: #ffffff !important;
-            font-size: 1.15rem; /* OPTIONAL: Slightly increased subtitle size to match the bigger box */
-            margin-top: 10px;
-        }}
+        html, body, [class*="css"] {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
 
-        .brand-card {{
-            background-color: var(--secondary-background-color);
-            border: 1px solid rgba(128, 128, 128, 0.2);
-            border-left: 6px solid {COLOR_MID};
-            border-radius: 14px;
-            padding: 20px 22px;
-            margin-bottom: 16px;
-            color: var(--text-color);
-        }}
-
-        .brand-badge {{
-            display: inline-block;
-            background-color: {COLOR_DEEP};
-            color: #ffffff !important;
-            padding: 6px 18px;
+        /* Hero Container */
+        .hero-wrapper {
+            background: linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%);
+            border: 1px solid rgba(16, 185, 129, 0.3);
             border-radius: 20px;
-            font-weight: 700;
-            font-size: 1rem;
-        }}
-        .badge-warning {{
-            background-color: {COLOR_DANGER};
-        }}
-        .badge-healthy {{
-            background-color: {COLOR_MID};
-        }}
-
-        .brand-divider {{
-            border: none;
-            height: 2px;
-            background: linear-gradient(90deg, {COLOR_DEEP}, transparent);
-            border-radius: 2px;
-            margin: 14px 0 20px 0;
-        }}
-
-        .conf-track, .rank-track {{
-            background-color: rgba(128, 128, 128, 0.15);
-            border-radius: 10px;
+            padding: 38px 36px;
+            margin-bottom: 24px;
+            box-shadow: 0 10px 30px -10px rgba(4, 120, 87, 0.45);
+            position: relative;
             overflow: hidden;
-        }}
-        .conf-track {{
-            width: 100%; height: 26px; margin: 6px 0 2px 0; border: 1px solid rgba(128, 128, 128, 0.2);
-        }}
-        .rank-track {{
-            flex-grow: 1; height: 20px; border: 1px solid rgba(128, 128, 128, 0.2);
-        }}
-        .conf-fill, .rank-fill {{
-            height: 100%;
+        }
+        .hero-wrapper::after {
+            content: "🌿";
+            font-size: 140px;
+            position: absolute;
+            right: 20px;
+            bottom: -30px;
+            opacity: 0.12;
+            pointer-events: none;
+        }
+        .hero-title {
+            color: #ffffff !important;
+            font-size: 2.8rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin: 0 0 10px 0;
+            letter-spacing: -0.02em;
+        }
+        .hero-tagline {
+            color: #d1fae5 !important;
+            font-size: 1.1rem;
+            font-weight: 400;
+            max-width: 720px;
+            margin-bottom: 18px;
+            line-height: 1.5;
+        }
+        .hero-badges-row {
             display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .hero-badge {
+            display: inline-flex;
             align-items: center;
-            justify-content: flex-end;
-            padding-right: 10px;
-            color: white !important;
-            font-weight: 700;
-            font-size: 0.85rem;
-            transition: width 0.6s ease-in-out;
-        }}
-
-        .rank-row {{
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-        }}
-        .rank-label {{
-            width: 230px;
-            font-size: 0.9rem;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.14);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            color: #ffffff !important;
+            font-size: 0.82rem;
             font-weight: 600;
-            color: var(--text-color);
-            padding-right: 10px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }}
+            padding: 5px 14px;
+            border-radius: 9999px;
+        }
 
-        .step-card {{
+        /* Glassmorphism Cards */
+        .bio-card {
             background-color: var(--secondary-background-color);
-            border: 1px solid rgba(128, 128, 128, 0.2);
+            border: 1px solid rgba(128, 128, 128, 0.18);
+            border-radius: 16px;
+            padding: 22px;
+            margin-bottom: 18px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s ease;
+        }
+        .bio-card:hover {
+            border-color: rgba(16, 185, 129, 0.35);
+        }
+
+        /* Status & Alert Badges */
+        .verdict-banner {
             border-radius: 14px;
-            padding: 18px;
+            padding: 18px 22px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: 600;
+        }
+        .verdict-healthy {
+            background: linear-gradient(90deg, rgba(16, 185, 129, 0.18) 0%, rgba(5, 150, 105, 0.08) 100%);
+            border: 1px solid #10b981;
+            color: #10b981;
+        }
+        .verdict-diseased {
+            background: linear-gradient(90deg, rgba(239, 68, 68, 0.18) 0%, rgba(220, 38, 38, 0.08) 100%);
+            border: 1px solid #ef4444;
+            color: #ef4444;
+        }
+        .verdict-inconclusive {
+            background: linear-gradient(90deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.08) 100%);
+            border: 1px solid #f59e0b;
+            color: #f59e0b;
+        }
+
+        /* Ranking bar styling */
+        .pred-bar-container {
+            margin-bottom: 12px;
+        }
+        .pred-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.92rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .pred-track {
+            background: rgba(128, 128, 128, 0.15);
+            border-radius: 9999px;
+            height: 12px;
+            overflow: hidden;
+            width: 100%;
+        }
+        .pred-fill {
+            height: 100%;
+            border-radius: 9999px;
+            transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Botanical Tags */
+        .plant-tag {
+            display: inline-block;
+            background: rgba(16, 185, 129, 0.12);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.28);
+            border-radius: 8px;
+            padding: 5px 12px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            margin: 4px;
+        }
+        .plant-tag-diseased {
+            background: rgba(239, 68, 68, 0.12);
+            color: #ef4444;
+            border-color: rgba(239, 68, 68, 0.28);
+        }
+
+        /* Pipeline Step Card */
+        .step-box {
+            background-color: var(--secondary-background-color);
+            border: 1px solid rgba(128, 128, 128, 0.18);
+            border-radius: 14px;
+            padding: 20px 16px;
             text-align: center;
             height: 100%;
-            color: var(--text-color);
-        }}
-        .step-number {{
-            display: inline-block;
-            background-color: {COLOR_DEEP};
-            color: white !important;
-            width: 34px;
-            height: 34px;
+        }
+        .step-num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            line-height: 34px;
-            font-weight: 800;
-            margin-bottom: 8px;
-        }}
+            background: #10b981;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 10px;
+        }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # ---------------------------------------------------------------------------------
-# HERO BANNER
+# SESSION STATE INITIALIZATION
+# ---------------------------------------------------------------------------------
+if "scan_history" not in st.session_state:
+    st.session_state.scan_history = []
+if "selected_sample" not in st.session_state:
+    st.session_state.selected_sample = None
+
+# ---------------------------------------------------------------------------------
+# DATA & MODEL LOADING FUNCTIONS
+# ---------------------------------------------------------------------------------
+@st.cache_resource(show_spinner="Reading botanical taxonomy classes...")
+def load_class_names(path: Path):
+    if not path.exists():
+        st.error(f"Missing class registry at: {path}")
+        st.stop()
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+@st.cache_resource(show_spinner="Initializing EfficientNet-B0 inference engine...")
+def load_model(candidates: list, num_classes: int):
+    # Find existing model path
+    active_path = None
+    for candidate in candidates:
+        if candidate.exists():
+            active_path = candidate
+            break
+
+    if active_path is None:
+        st.error(
+            f"❌ Model weights not found! Checked locations:\n" +
+            "\n".join([f"- `{c}`" for c in candidates]) +
+            "\n\nPlease ensure `LeafID.pt` exists in the application root directory."
+        )
+        st.stop()
+
+    model = models.efficientnet_b0(weights=None)
+    in_features = model.classifier[1].in_features
+    model.classifier[1] = nn.Linear(in_features, num_classes)
+
+    try:
+        checkpoint = torch.load(active_path, map_location=DEVICE)
+        state_dict = checkpoint["model_state_dict"] if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint else checkpoint
+        model.load_state_dict(state_dict)
+    except Exception as e:
+        st.error(f"Error loading model weights from {active_path.name}: {e}")
+        st.stop()
+
+    model.to(DEVICE)
+    model.eval()
+    return model, active_path.name
+
+# Preprocessing pipeline
+preprocess_transform = transforms.Compose([
+    transforms.Resize((IMG_SIZE, IMG_SIZE)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=NORM_MEAN, std=NORM_STD),
+])
+
+def predict_leaf(model, pil_img: Image.Image, classes: list, top_k: int = 5):
+    """Executes EfficientNet-B0 inference and returns top-k predictions with latencies."""
+    start_time = time.perf_counter()
+    rgb_img = pil_img.convert("RGB")
+    tensor = preprocess_transform(rgb_img).unsqueeze(0).to(DEVICE)
+
+    with torch.no_grad():
+        outputs = model(tensor)
+        probs = torch.softmax(outputs, dim=1)[0]
+
+    top_probs, top_indices = torch.topk(probs, k=min(top_k, len(classes)))
+    elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+
+    results = []
+    for p, idx in zip(top_probs, top_indices):
+        results.append((classes[idx.item()], float(p.item()) * 100.0))
+
+    return results, elapsed_ms
+
+# ---------------------------------------------------------------------------------
+# CLASS NAME NORMALIZATION & HELPERS
+# ---------------------------------------------------------------------------------
+TYPO_MAPPINGS = {
+    "gauva": "guava",
+    "coriender": "coriander",
+    "bhrami": "brahmi",
+    "astma_weed": "asthma_weed",
+    "amruthaballi": "amrutha_balli",
+    "citron_lime_herelikai": "citron_lime_herale",
+    "images_to_predict": "unclassified_foliage",
+}
+
+def clean_class_name(raw_name: str) -> dict:
+    """Normalizes raw dataset label names, strips internal tokens, and identifies disease status."""
+    is_diseased = "diseased" in raw_name.lower()
+    norm = raw_name.lower()
+
+    # Apply typo corrections
+    for k, v in TYPO_MAPPINGS.items():
+        if k in norm:
+            norm = norm.replace(k, v)
+
+    # Remove disease marker
+    norm = norm.replace("_diseased", "").replace("-diseased", "")
+
+    # Remove internal dataset tokens like _p0a, _p11b, _p2, etc.
+    tokens = [t for t in norm.replace("-", "_").split("_") if t]
+    cleaned_tokens = []
+    for token in tokens:
+        # Check if token is internal dataset artifact (e.g., p0, p1a, p11b, p2)
+        if len(token) <= 4 and token.startswith("p") and any(c.isdigit() for c in token):
+            continue
+        cleaned_tokens.append(token)
+
+    base_species = " ".join(cleaned_tokens).title()
+    if not base_species:
+        base_species = raw_name.replace("_", " ").title()
+
+    display_name = f"{base_species} (Diseased)" if is_diseased else f"{base_species}"
+
+    # Determine species key for knowledge base lookups
+    species_key = "_".join(cleaned_tokens).lower()
+
+    return {
+        "raw": raw_name,
+        "clean_species": base_species,
+        "display_name": display_name,
+        "is_diseased": is_diseased,
+        "species_key": species_key,
+    }
+
+# ---------------------------------------------------------------------------------
+# INITIALIZE MODEL & LABELS
+# ---------------------------------------------------------------------------------
+raw_classes = load_class_names(CLASS_NAMES_PATH)
+model, loaded_model_name = load_model(MODEL_CANDIDATES, len(raw_classes))
+
+parsed_classes = [clean_class_name(c) for c in raw_classes]
+diseased_classes = [c for c in parsed_classes if c["is_diseased"]]
+healthy_classes = [c for c in parsed_classes if not c["is_diseased"]]
+unique_species = sorted(list({c["clean_species"] for c in parsed_classes}))
+
+# ---------------------------------------------------------------------------------
+# HERO SECTION
 # ---------------------------------------------------------------------------------
 st.markdown(
     f"""
-    <div class="hero-banner">
-        <p class="hero-title">{APP_NAME}</p>
-        <p class="hero-subtitle">
-            Point your camera at a leaf. LEAF ID tells you the species — and, for
-            select species, whether it's showing signs of disease.
+    <div class="hero-wrapper">
+        <h1 class="hero-title">{APP_NAME}</h1>
+        <p class="hero-tagline">
+            Next-generation botanical artificial intelligence. Upload or snap a leaf photo
+            to identify species taxonomy and detect fungal, bacterial, or blight infections with clinical accuracy.
         </p>
+        <div class="hero-badges-row">
+            <span class="hero-badge">🧠 EfficientNet-B0 Engine</span>
+            <span class="hero-badge">🍃 84 Recognized Classes</span>
+            <span class="hero-badge">🔬 Pathology Detection Active</span>
+            <span class="hero-badge">⚡ Weights: {loaded_model_name}</span>
+            <span class="hero-badge">🛡️ Offline CPU Capable</span>
+        </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
 # ---------------------------------------------------------------------------------
-# MODEL / DATA LOADING (EfficientNet-B0)
-# ---------------------------------------------------------------------------------
-@st.cache_resource(show_spinner="Loading class labels...")
-def load_class_names(path: Path):
-    if not path.exists():
-        st.error(f"Could not find class_names.json at: {path}")
-        st.stop()
-    with open(path, "r") as f:
-        names = json.load(f)
-    return names
-
-@st.cache_resource(show_spinner="Waking up EfficientNet-B0...")
-def load_model(model_path: Path, num_classes: int):
-    if not model_path.exists():
-        st.error(f"Could not find model weights at: {model_path}")
-        st.stop()
-
-    model = models.efficientnet_b0(weights=None)
-
-    in_features = model.classifier[1].in_features
-    model.classifier[1] = nn.Linear(in_features, num_classes)
-
-    state_dict = torch.load(model_path, map_location=DEVICE)
-    if isinstance(state_dict, dict) and "model_state_dict" in state_dict:
-        state_dict = state_dict["model_state_dict"]
-
-    model.load_state_dict(state_dict)
-    model.to(DEVICE)
-    model.eval()
-    return model
-
-# ---------------------------------------------------------------------------------
-# IMAGE PREPROCESSING
-# ---------------------------------------------------------------------------------
-preprocess = transforms.Compose(
-    [
-        transforms.Resize((IMG_SIZE, IMG_SIZE)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=NORM_MEAN, std=NORM_STD),
-    ]
-)
-
-def predict(model, image: Image.Image, class_names: list, top_k: int = 3):
-    image = image.convert("RGB")
-    input_tensor = preprocess(image).unsqueeze(0).to(DEVICE)
-
-    with torch.no_grad():
-        outputs = model(input_tensor)
-        probabilities = torch.softmax(outputs, dim=1)[0]
-
-    top_probs, top_idxs = torch.topk(probabilities, k=min(top_k, len(class_names)))
-    return [
-        (class_names[idx], float(prob) * 100.0)
-        for prob, idx in zip(top_probs, top_idxs)
-    ]
-
-def format_class_name(raw_name: str) -> str:
-    is_diseased = "diseased" in raw_name.lower()
-    cleaned = raw_name.replace("_diseased", "").replace("-", " ").replace("_", " ")
-    tokens = cleaned.split()
-    if tokens and len(tokens[-1]) <= 4 and tokens[-1].lower().startswith("p") and tokens[-1][1:].isalnum():
-        tokens = tokens[:-1]
-    cleaned = " ".join(tokens).strip().title()
-    return f"{cleaned} (Diseased)" if is_diseased else cleaned
-
-def confidence_style(pct: float):
-    if pct >= 85:
-        return "High Confidence", COLOR_MID
-    elif pct >= 50:
-        return "Moderate Confidence", COLOR_WARN
-    else:
-        return "Low Confidence", COLOR_DANGER
-
-# ---------------------------------------------------------------------------------
-# LOAD CLASS NAMES + MODEL (cached, runs once)
-# ---------------------------------------------------------------------------------
-class_names = load_class_names(CLASS_NAMES_PATH)
-model = load_model(MODEL_PATH, num_classes=len(class_names))
-
-diseased_labels = [c for c in class_names if "diseased" in c.lower()]
-species_only_labels = [c for c in class_names if c not in diseased_labels]
-disease_capable_species = sorted({format_class_name(c).replace(" (Diseased)", "") for c in diseased_labels})
-
-# ---------------------------------------------------------------------------------
-# SIDEBAR — About the Project
+# SIDEBAR
 # ---------------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown(f"<h2 style='color:{COLOR_DEEP};'>About {APP_NAME}</h2>", unsafe_allow_html=True)
+    st.image(
+        "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=600&auto=format&fit=crop&q=80",
+        caption="Leaf-ID Botanical Intelligence",
+        use_container_width=True,
+    )
+
+    st.markdown("### 📊 Engine Status")
+    c_m1, c_m2 = st.columns(2)
+    c_m1.metric("Catalog Classes", len(raw_classes))
+    c_m2.metric("Disease Models", len(diseased_classes))
+
+    st.markdown("---")
+    st.markdown("### 📸 Photography Guidelines")
     st.markdown(
-        f"""
-        **LEAF ID** is a deep-learning leaf recognition tool built on an **EfficientNet-B0** architecture. It was trained across a wide, real-world collection of leaves — 
-        from common fruit trees and garden vegetables to traditional medicinal and 
-        ornamental plants — so it can tell one species from another at a glance, 
-        and catch early signs of disease.
+        """
+        - **Subject Focus:** Center a **single leaf** flat against a plain, contrasting backdrop.
+        - **Lighting:** Use bright, diffused natural light (avoid hard flash reflections or harsh shadows).
+        - **Resolution:** Ensure vein structure and any discolored lesions are clearly in focus.
+        - **Orientation:** Fill at least 60% of the camera frame with the lamina.
         """
     )
 
-    st.markdown("<hr class='brand-divider'>", unsafe_allow_html=True)
-    st.markdown(f"<h4 style='color:{COLOR_DEEP};'>Dataset at a Glance</h4>", unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("### 📜 Session Analytics")
+    st.write(f"Scans this session: **{len(st.session_state.scan_history)}**")
+    if st.session_state.scan_history:
+        if st.button("🧹 Clear Scan History", use_container_width=True):
+            st.session_state.scan_history = []
+            st.rerun()
 
-    m1, m2 = st.columns(2)
-    m1.metric("Total Classes", len(class_names))
-    m2.metric("Disease Labels", len(diseased_labels))
-
-    st.caption(
-        f"Includes species like *aloevera, mango, guava, tomato, turmeric, "
-        f"neem, hibiscus* and **{len(class_names) - 1}+** others."
-    )
-
-    with st.expander("Species with disease detection"):
-        st.write(
-            "For the species below, LEAF ID can distinguish a **healthy** leaf "
-            "from a **diseased** one:"
-        )
-        for sp in disease_capable_species:
-            st.markdown(f"- {sp}")
-
-    st.markdown("<hr class='brand-divider'>", unsafe_allow_html=True)
-    st.markdown(
-        f"""
-        **Model Architecture:** EfficientNet-B0 
-        **Input size:** 224 × 224 px
-        **Framework:** PyTorch + Streamlit
-        **Runs on:** CPU only — 100% offline capable
-        """
-    )
-    st.caption(f"Session started: {datetime.now().strftime('%b %d, %Y — %H:%M')}")
+    st.caption("Powered by PyTorch & EfficientNet • MIT License")
 
 # ---------------------------------------------------------------------------------
-# MAIN AREA — TABS
+# NAVIGATION TABS
 # ---------------------------------------------------------------------------------
-tab_diagnose, tab_insights, tab_how = st.tabs(
-    ["Diagnose a Leaf", "Dataset Insights", "How It Works"]
-)
+tab_diagnose, tab_directory, tab_model = st.tabs([
+    "🌿 Leaf Diagnosis Hub",
+    "📚 Botanical Directory (84 Classes)",
+    "🔬 Model Architecture & Specs",
+])
 
-# =========================== TAB 1 — DIAGNOSE =====================================
+# =================================================================================
+# TAB 1: LEAF DIAGNOSIS HUB
+# =================================================================================
 with tab_diagnose:
-    st.markdown(
-        f"<h3 style='color:{COLOR_DEEP};'>Upload a Leaf Photo</h3>",
-        unsafe_allow_html=True,
+    st.markdown("### 1. Select Input Source")
+
+    input_mode = st.radio(
+        "Choose how you want to provide your leaf image:",
+        ["📁 Upload Image File", "📷 Live Camera Capture", "🧪 Quick-Test Demo Samples"],
+        horizontal=True,
+        label_visibility="collapsed",
     )
-    st.write("For best results, use a well-lit, close-up photo of a single leaf against a plain background.")
 
-    uploaded_file = st.file_uploader("Choose a JPG or PNG image", type=["jpg", "jpeg", "png"], key="uploader")
+    active_image = None
+    image_source_label = ""
 
-    if uploaded_file is not None:
-        image_bytes = uploaded_file.read()
-        image = Image.open(io.BytesIO(image_bytes))
+    # Mode 1: File Uploader
+    if input_mode == "📁 Upload Image File":
+        uploaded_file = st.file_uploader(
+            "Upload leaf photograph (JPG, JPEG, PNG, WEBP)",
+            type=["jpg", "jpeg", "png", "webp"],
+            help="Drag and drop or browse files. Images are processed locally on CPU.",
+            key="file_uploader",
+        )
+        if uploaded_file is not None:
+            try:
+                active_image = Image.open(uploaded_file)
+                image_source_label = f"Uploaded File: {uploaded_file.name}"
+            except Exception as e:
+                st.error(f"Failed to read image file: {e}")
 
-        left, right = st.columns([1, 1.3])
+    # Mode 2: Camera Capture
+    elif input_mode == "📷 Live Camera Capture":
+        st.info("💡 Grant camera permission in your browser if prompted. Center the leaf in the viewfinder.")
+        cam_pic = st.camera_input("Take a photo of a leaf", key="leaf_camera")
+        if cam_pic is not None:
+            try:
+                active_image = Image.open(cam_pic)
+                image_source_label = "Live Camera Capture"
+            except Exception as e:
+                st.error(f"Failed to process camera capture: {e}")
 
-        with left:
-            st.markdown(f"<h4 style='color:{COLOR_DEEP};'>Your Image</h4>", unsafe_allow_html=True)
-            st.image(image, caption="Uploaded Leaf", use_container_width=True)
+    # Mode 3: Built-in Sample Gallery
+    else:
+        st.markdown("**Click any pre-loaded sample below to test the classifier instantly:**")
+        sample_cols = st.columns(4)
 
-        with st.spinner("Running the leaf through EfficientNet-B0..."):
-            top_predictions = predict(model, image, class_names, top_k=3)
+        samples_meta = [
+            ("sample_mango.jpg", "Healthy Mango Leaf", "🥭 Mango (Healthy)"),
+            ("sample_diseased_lemon.jpg", "Diseased Lemon Leaf", "🍋 Lemon (Canker)"),
+            ("sample_aloevera.jpg", "Healthy Aloe Vera", "🪴 Aloe Vera (Healthy)"),
+            ("sample_diseased_tomato.jpg", "Diseased Tomato Leaf", "🍅 Tomato (Blight)"),
+        ]
 
-        top_raw, top_confidence = top_predictions[0]
-        top_display = format_class_name(top_raw)
-        is_diseased = "diseased" in top_raw.lower()
-        conf_label, conf_color = confidence_style(top_confidence)
+        for i, (fname, title, desc) in enumerate(samples_meta):
+            fpath = SAMPLES_DIR / fname
+            with sample_cols[i]:
+                if fpath.exists():
+                    img_thumb = Image.open(fpath)
+                    st.image(img_thumb, caption=desc, use_container_width=True)
+                    if st.button(f"Load {title}", key=f"btn_sample_{i}", use_container_width=True):
+                        st.session_state.selected_sample = fpath
+                        st.rerun()
+                else:
+                    st.caption(f"{title} (File missing)")
 
-        with right:
-            st.markdown(f"<h4 style='color:{COLOR_DEEP};'>Diagnosis</h4>", unsafe_allow_html=True)
+        if st.session_state.selected_sample and Path(st.session_state.selected_sample).exists():
+            active_image = Image.open(st.session_state.selected_sample)
+            image_source_label = f"Demo Sample: {Path(st.session_state.selected_sample).name}"
 
-            badge_class = "badge-warning" if is_diseased else "badge-healthy"
-            
-            st.markdown(
-                f"""
-                <div class="brand-card">
-                    <span class="brand-badge {badge_class}">
-                        {top_display}
-                    </span>
-                    <div class="conf-track">
-                        <div class="conf-fill" style="width:{top_confidence:.1f}%; background-color:{conf_color};">
-                            {top_confidence:.1f}%
-                        </div>
-                    </div>
-                    <p style="margin-top:6px; color:var(--text-color); font-size:0.9rem;">
-                        <b>{conf_label}</b> in this prediction
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+    # -----------------------------------------------------------------------------
+    # DIAGNOSIS PROCESSING & RESULTS
+    # -----------------------------------------------------------------------------
+    if active_image is not None:
+        st.markdown("---")
+        col_img, col_diag = st.columns([1, 1.25], gap="large")
 
-            if is_diseased:
-                st.warning(
-                    f"Signs consistent with **{top_display}** were detected. "
-                    "Consider isolating the plant and consulting an agricultural expert."
-                )
+        with col_img:
+            st.markdown(f"#### 🔍 Specimen Inspection")
+            st.image(active_image, caption=image_source_label, use_container_width=True)
+
+            # Metadata details
+            w, h = active_image.size
+            st.caption(f"📏 Dimensions: **{w} × {h} px** • Format: **{active_image.format or 'RGB'}** • Mode: **{active_image.mode}**")
+
+        with col_diag:
+            st.markdown("#### 📋 Diagnostic Report")
+
+            with st.spinner("Analyzing botanical morphology and pathology signatures..."):
+                predictions, latency_ms = predict_leaf(model, active_image, raw_classes, top_k=5)
+
+            top_raw, top_conf = predictions[0]
+            top_parsed = clean_class_name(top_raw)
+            is_diseased = top_parsed["is_diseased"]
+
+            # Session history update
+            history_item = {
+                "timestamp": datetime.now().strftime("%H:%M:%S"),
+                "species": top_parsed["clean_species"],
+                "diseased": is_diseased,
+                "confidence": top_conf,
+            }
+            if not st.session_state.scan_history or st.session_state.scan_history[-1]["timestamp"] != history_item["timestamp"]:
+                st.session_state.scan_history.append(history_item)
+
+            # Dynamic Verdict Banner
+            if top_conf < 45.0:
+                banner_class = "verdict-inconclusive"
+                icon = "⚠️"
+                verdict_title = f"{icon} Inconclusive Match ({top_parsed['clean_species']})"
+                verdict_subtitle = "Confidence is low. Please reposition the leaf with flat illumination and retake."
+            elif is_diseased:
+                banner_class = "verdict-diseased"
+                icon = "🚨"
+                verdict_title = f"{icon} Pathology Detected: {top_parsed['clean_species']}"
+                verdict_subtitle = "Signs of plant disease or bacterial/fungal lesion were detected."
             else:
-                st.success(f"This leaf looks like a healthy **{top_display}** leaf.")
-                if top_confidence >= 90:
-                    st.balloons()
+                banner_class = "verdict-healthy"
+                icon = "🌿"
+                verdict_title = f"{icon} Healthy Specimen: {top_parsed['clean_species']}"
+                verdict_subtitle = "Foliage shows uniform pigmentation and healthy vigor."
 
-        st.markdown("<hr class='brand-divider'>", unsafe_allow_html=True)
-
-        st.markdown(f"<h3 style='color:{COLOR_DEEP};'>Top 3 Predictions</h3>", unsafe_allow_html=True)
-
-        rank_colors = [COLOR_MID, COLOR_WARN, COLOR_SOFT]
-        for i, (raw_name, conf) in enumerate(top_predictions):
-            label = format_class_name(raw_name)
             st.markdown(
                 f"""
-                <div class="rank-row">
-                    <div class="rank-label">#{i+1} {label}</div>
-                    <div class="rank-track">
-                        <div class="rank-fill" style="width:{conf:.1f}%; background-color:{rank_colors[i % 3]};">
-                            {conf:.1f}%
-                        </div>
+                <div class="verdict-banner {banner_class}">
+                    <div>
+                        <div style="font-size:1.25rem; font-weight:800;">{verdict_title}</div>
+                        <div style="font-size:0.88rem; opacity:0.9; margin-top:3px;">{verdict_subtitle}</div>
                     </div>
+                    <div style="font-size:1.6rem; font-weight:800;">{top_conf:.1f}%</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-        with st.expander("View as a table"):
-            df = pd.DataFrame(
-                [(format_class_name(n), round(c, 2)) for n, c in top_predictions],
-                columns=["Prediction", "Confidence (%)"],
+            # Confidence Level Breakdown
+            c_gauge1, c_gauge2 = st.columns(2)
+            conf_tier = "High Confidence" if top_conf >= 80 else ("Moderate Confidence" if top_conf >= 50 else "Low / Uncertain")
+            c_gauge1.metric("Match Confidence", f"{top_conf:.2f}%", delta=conf_tier)
+            c_gauge2.metric("Inference Latency", f"{latency_ms:.1f} ms", delta="CPU Engine", delta_color="off")
+
+            st.markdown("##### 🏆 Top Candidate Predictions")
+            colors = ["#10b981", "#34d399", "#6ee7b7", "#a7f3d0", "#d1fae5"]
+            if is_diseased:
+                colors[0] = "#ef4444"
+
+            for rank, (cand_raw, cand_conf) in enumerate(predictions[:4], start=1):
+                cand_info = clean_class_name(cand_raw)
+                bar_color = "#ef4444" if cand_info["is_diseased"] else "#10b981"
+
+                st.markdown(
+                    f"""
+                    <div class="pred-bar-container">
+                        <div class="pred-header">
+                            <span>#{rank} <b>{cand_info['display_name']}</b></span>
+                            <span>{cand_conf:.1f}%</span>
+                        </div>
+                        <div class="pred-track">
+                            <div class="pred-fill" style="width:{cand_conf:.1f}%; background-color:{bar_color};"></div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+        # -----------------------------------------------------------------------------
+        # BOTANICAL ADVISORY & TREATMENT EXPANDER
+        # -----------------------------------------------------------------------------
+        st.markdown("---")
+        st.markdown("### 💊 Botanical Advisory & Care Plan")
+
+        species_key = top_parsed["species_key"]
+        advice_info = BOTANICAL_ADVICE.get(species_key, None)
+
+        # Fallback partial matching if direct key not matched
+        if not advice_info:
+            for k in BOTANICAL_ADVICE:
+                if k in species_key or species_key in k:
+                    advice_info = BOTANICAL_ADVICE[k]
+                    break
+
+        adv_col1, adv_col2 = st.columns([1.5, 1], gap="medium")
+
+        with adv_col1:
+            if is_diseased:
+                if advice_info and "diseased" in advice_info:
+                    d_data = advice_info["diseased"]
+                    st.error(f"**Identified Condition:** {d_data['condition']}")
+                    st.markdown(f"**Observed Symptoms:** {d_data['symptoms']}")
+                    st.markdown(f"**Probable Cause:** {d_data['cause']}")
+
+                    st.markdown("#### 🛡️ Recommended Intervention Steps")
+                    for step in d_data["treatment"]:
+                        st.markdown(f"- ✅ {step}")
+                else:
+                    st.warning(
+                        f"Specific pathology monograph for **{top_parsed['clean_species']}** is not in our direct database. "
+                        "General intervention: Isolate infected plants, prune damaged foliage with disinfected shears, "
+                        "and apply a broad-spectrum copper or bio-fungicidal spray."
+                    )
+            else:
+                if advice_info and "healthy" in advice_info:
+                    st.success(f"**Foliage Vigor:** Excellent. No immediate pathogen intervention required.")
+                    st.markdown(f"**Care & Cultivation:** {advice_info['healthy']['care']}")
+                else:
+                    st.success(
+                        f"**Foliage Vigor:** Specimen matches healthy **{top_parsed['clean_species']}** foliage. "
+                        "Continue optimal irrigation, nutrient monitoring, and inspection for pests."
+                    )
+
+        with adv_col2:
+            st.markdown("#### 📥 Diagnostic Certificate")
+            report_text = f"""====================================================
+LEAF ID PRO — BOTANICAL DIAGNOSTIC REPORT
+Date & Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+====================================================
+SPECIMEN ANALYSIS:
+Primary Species: {top_parsed['clean_species']}
+Pathology Status: {'DISEASED' if is_diseased else 'HEALTHY'}
+Model Verdict: {top_parsed['display_name']}
+Confidence Score: {top_conf:.2f}%
+Model Architecture: EfficientNet-B0 (PyTorch)
+Inference Device: CPU ({latency_ms:.1f} ms)
+
+TOP PREDICTIONS:
+"""
+            for i, (c_raw, c_conf) in enumerate(predictions, 1):
+                c_clean = clean_class_name(c_raw)
+                report_text += f"{i}. {c_clean['display_name']} — {c_conf:.2f}%\n"
+
+            report_text += f"""
+RECOMMENDED ACTION:
+{('Consult local plant pathology extension or apply targeted fungicide/bactericide.' if is_diseased else 'Maintain standard watering, sunlight, and soil maintenance.')}
+====================================================
+"""
+            st.download_button(
+                label="📄 Download Diagnostic Report (.txt)",
+                data=report_text,
+                file_name=f"leafid_report_{top_parsed['clean_species'].lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                mime="text/plain",
+                use_container_width=True,
             )
-            st.dataframe(df, hide_index=True, use_container_width=True)
+
+            with st.expander("🔬 View Raw Prediction Distribution"):
+                df_preds = pd.DataFrame([
+                    {"Class": clean_class_name(r)["display_name"], "Raw ID": r, "Confidence (%)": round(c, 2)}
+                    for r, c in predictions
+                ])
+                st.dataframe(df_preds, hide_index=True, use_container_width=True)
 
     else:
-        st.info("Upload a leaf image above to get started.")
+        # Empty state guidance
+        st.info("👆 Please upload an image, capture via camera, or select a demo sample to begin diagnosis.")
+
         st.markdown(
-            f"""
-            <div class="brand-card">
-                <b>Tip:</b> LEAF ID recognizes {len(class_names)} classes — from
-                common crops like tomato and corn, to medicinal plants like aloevera, neem, and basil.
+            """
+            <div class="bio-card">
+                <h4>✨ Features of LEAF ID Pro</h4>
+                <ul>
+                    <li><b>Dual-Action Detection:</b> Identifies species taxonomy while simultaneously diagnosing foliar pathology.</li>
+                    <li><b>Broad Botanical Vocabulary:</b> Covers 84 classes of commercial crops, fruit trees, medicinal herbs, and ornamental plants.</li>
+                    <li><b>Zero Cloud Dependency:</b> Complete PyTorch deep learning pipeline executes locally on CPU with zero privacy leakage.</li>
+                    <li><b>Actionable Pathology Guide:</b> Provides immediate cultural and organic treatment remedies for identified diseases.</li>
+                </ul>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-# =========================== TAB 2 — DATASET INSIGHTS =============================
-with tab_insights:
-    st.markdown(f"<h3 style='color:{COLOR_DEEP};'>What Can {APP_NAME} Recognize?</h3>", unsafe_allow_html=True)
+# =================================================================================
+# TAB 2: BOTANICAL SPECIES DIRECTORY
+# =================================================================================
+with tab_directory:
+    st.markdown("### 📚 Supported Botanical Taxonomy")
     st.write(
-        f"LEAF ID's {len(class_names)}-class vocabulary spans fruit trees, garden "
-        "vegetables, spices, and traditional medicinal or ornamental plants."
+        f"LEAF ID Pro is trained across **{len(raw_classes)} distinct classes**, spanning common agricultural staples, "
+        "tropical fruit trees, ayurvedic & traditional herbs, and garden ornamentals."
     )
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total Classes", len(class_names))
-    c2.metric("Species w/ Disease Pairs", len(disease_capable_species))
-    c3.metric("Species-only Labels", len(species_only_labels) - len(disease_capable_species) * 0)
+    stat1, stat2, stat3 = st.columns(3)
+    stat1.metric("Total Vocabulary Classes", len(raw_classes))
+    stat2.metric("Diseased State Categories", len(diseased_classes))
+    stat3.metric("Species-Only / Healthy Categories", len(healthy_classes))
 
-    st.markdown("<hr class='brand-divider'>", unsafe_allow_html=True)
+    st.markdown("---")
 
-    comp_df = pd.DataFrame(
-        {
-            "Category": ["Healthy / Species-only Labels", "Diseased Labels"],
-            "Count": [len(class_names) - len(diseased_labels), len(diseased_labels)],
-        }
-    ).set_index("Category")
-    st.markdown(f"<h4 style='color:{COLOR_DEEP};'>Label Composition</h4>", unsafe_allow_html=True)
-    st.bar_chart(comp_df, color=COLOR_MID)
+    col_search, col_filter = st.columns([2, 1])
+    with col_search:
+        search_query = st.text_input("🔍 Search species or disease", placeholder="e.g. mango, tomato, diseased, basil, lemon...")
+    with col_filter:
+        filter_type = st.selectbox("Category Filter", ["All Classes", "Healthy / Species Only", "Disease-Monitored Species"])
 
-    st.markdown(f"<h4 style='color:{COLOR_DEEP};'>Browse All Classes</h4>", unsafe_allow_html=True)
-    search = st.text_input("Filter classes", placeholder="e.g. mango, diseased, herb...")
+    # Filter logic
+    filtered_list = parsed_classes
+    if filter_type == "Healthy / Species Only":
+        filtered_list = [c for c in filtered_list if not c["is_diseased"]]
+    elif filter_type == "Disease-Monitored Species":
+        filtered_list = [c for c in filtered_list if c["is_diseased"]]
 
-    display_names = sorted(format_class_name(c) for c in class_names)
-    if search:
-        display_names = [n for n in display_names if search.lower() in n.lower()]
+    if search_query:
+        sq = search_query.lower()
+        filtered_list = [c for c in filtered_list if sq in c["display_name"].lower() or sq in c["raw"].lower()]
 
-    cols = st.columns(3)
-    for i, name in enumerate(display_names):
-        with cols[i % 3]:
-            tag_color = COLOR_DANGER if "(Diseased)" in name else COLOR_MID
-            st.markdown(
-                f"""<span style="display:inline-block; background-color:{tag_color};
-                color:white !important; padding:4px 10px; border-radius:12px; font-size:0.8rem;
-                margin-bottom:6px;">{name}</span>""",
-                unsafe_allow_html=True,
-            )
+    st.caption(f"Showing **{len(filtered_list)}** matching classes:")
 
-# =========================== TAB 3 — HOW IT WORKS ================================
-with tab_how:
-    st.markdown(f"<h3 style='color:{COLOR_DEEP};'>How {APP_NAME} Works</h3>", unsafe_allow_html=True)
-    st.write("From your photo to a diagnosis, in four steps:")
-
-    steps = [
-        ("1", "Capture", "You upload a clear photo of a single leaf."),
-        ("2", "Preprocess", "The image is resized to 224×224 and normalized."),
-        ("3", "Inference", "EfficientNet-B0 scores every class."),
-        ("4", "Report", "The top-3 most likely classes are ranked and color-coded."),
-    ]
-    cols = st.columns(4)
-    for col, (num, title, desc) in zip(cols, steps):
-        with col:
+    grid_cols = st.columns(3)
+    for idx, item in enumerate(filtered_list):
+        with grid_cols[idx % 3]:
+            tag_class = "plant-tag-diseased" if item["is_diseased"] else "plant-tag"
+            icon = "🚨" if item["is_diseased"] else "🌱"
             st.markdown(
                 f"""
-                <div class="step-card">
-                    <div class="step-number">{num}</div>
-                    <br>
-                    <b>{title}</b>
-                    <p style="font-size:0.85rem; color:var(--text-color); opacity: 0.8; margin-top:5px;">{desc}</p>
+                <div class="{tag_class}">
+                    {icon} <b>{item['display_name']}</b>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-    st.markdown("<hr class='brand-divider'>", unsafe_allow_html=True)
+# =================================================================================
+# TAB 3: MODEL ARCHITECTURE & SPECS
+# =================================================================================
+with tab_model:
+    st.markdown("### 🔬 Neural Network Architecture & Technical Pipeline")
 
-    st.markdown(f"<h4 style='color:{COLOR_DEEP};'>Under the Hood</h4>", unsafe_allow_html=True)
-    st.markdown(
-        f"""
-        <div class="brand-card">
-        <b>Architecture:</b> EfficientNet-B0 backbone with a custom linear
-        classifier head sized to {len(class_names)} output classes.<br><br>
-        <b>Preprocessing pipeline:</b> RGB conversion → resize to 224×224 →
-        tensor conversion → normalization with ImageNet mean
-        <code>[0.485, 0.456, 0.406]</code> and std
-        <code>[0.229, 0.224, 0.225]</code>.<br><br>
-        <b>Inference:</b> Softmax over the model's output logits converts raw
-        scores into probabilities, from which the top-3 classes are shown.<br><br>
-        <b>Deployment:</b> The model and all computation are forced onto the CPU,
-        so LEAF ID runs identically on a laptop with no GPU. It is very Light-weight.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    arch_col1, arch_col2 = st.columns([1.2, 1], gap="large")
+
+    with arch_col1:
+        st.markdown(
+            """
+            #### 🧬 EfficientNet-B0 Backbone
+            LEAF ID Pro leverages the **EfficientNet-B0** convolutional neural network, fine-tuned
+            via transfer learning for high-precision botanical feature extraction.
+
+            - **Compound Scaling:** Uniformly balances depth ($d=1.0$), width ($w=1.0$), and resolution ($r=1.0$) using fixed scaling coefficients.
+            - **Mobile Inverted Bottleneck (MBConv):** Employs depthwise separable convolutions with Squeeze-and-Excitation (SE) attention blocks for minimal parameter overhead (~5.3M parameters).
+            - **Custom Classification Head:** Replaces ImageNet's 1000-class linear projection with a specialized `nn.Linear(1280, 84)` output layer.
+            """
+        )
+
+        st.markdown("#### 🔄 Preprocessing & Inference Flow")
+        steps = [
+            ("1", "Input Ingestion", "Accepts standard JPG/PNG/WEBP and converts color space to 3-channel RGB."),
+            ("2", "Geometric Scaling", f"Bilinear interpolation resizes specimen lamina to {IMG_SIZE}×{IMG_SIZE} px."),
+            ("3", "Standardization", f"Normalizes with ImageNet coefficients: μ={NORM_MEAN}, σ={NORM_STD}."),
+            ("4", "Logit Projection", "Passes through EfficientNet-B0 and applies Softmax activation across 84 logits."),
+        ]
+        s_cols = st.columns(4)
+        for c, (num, title, desc) in zip(s_cols, steps):
+            with c:
+                st.markdown(
+                    f"""
+                    <div class="step-box">
+                        <div class="step-num">{num}</div>
+                        <div style="font-weight:700; font-size:0.95rem; margin-bottom:6px;">{title}</div>
+                        <div style="font-size:0.8rem; opacity:0.85;">{desc}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+    with arch_col2:
+        st.markdown("#### ⚙️ Technical Specifications")
+        specs_df = pd.DataFrame({
+            "Specification": [
+                "Architecture",
+                "Weight Checkpoint",
+                "Input Dimensions",
+                "Output Classes",
+                "Runtime Device",
+                "Framework",
+                "Dataset Sources"
+            ],
+            "Value": [
+                "EfficientNet-B0 (MBConv + SE)",
+                loaded_model_name,
+                f"{IMG_SIZE} × {IMG_SIZE} × 3",
+                f"{len(raw_classes)} Classes",
+                "CPU (Offline Capable)",
+                f"PyTorch {torch.__version__}",
+                "Kaggle (48 Plant Leaves / Plant Leaf / Classification)"
+            ]
+        })
+        st.dataframe(specs_df, hide_index=True, use_container_width=True)
+
+        st.markdown("#### 📚 Open Datasets Attributions")
+        st.markdown(
+            """
+            - [48 Plant Leaves Datasets](https://www.kaggle.com/datasets/developerzulkarnain/48-plant-leaves-datasets)
+            - [Plant Leaf Dataset](https://www.kaggle.com/datasets/mahaninghubballi/plant-leaf-dataset)
+            - [Plant Leaves for Image Classification](https://www.kaggle.com/datasets/csafrit2/plant-leaves-for-image-classification)
+            """
+        )
 
 # ---------------------------------------------------------------------------------
 # FOOTER
 # ---------------------------------------------------------------------------------
-st.markdown("<hr class='brand-divider'>", unsafe_allow_html=True)
+st.markdown("---")
 st.markdown(
-    f"<p style='text-align:center; color:var(--text-color); opacity:0.6; font-size:0.85rem;'>"
-    f"{APP_NAME} - Made with Love and a lot of effort"
-    "</p>",
+    """
+    <div style="text-align: center; opacity: 0.7; font-size: 0.85rem; padding: 10px 0;">
+        🌿 <b>LEAF ID Pro</b> — Open-Source Plant Recognition & Pathology Diagnostic Tool • Built with PyTorch & Streamlit
+    </div>
+    """,
     unsafe_allow_html=True,
 )

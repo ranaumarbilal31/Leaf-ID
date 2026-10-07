@@ -1,0 +1,17 @@
+[server]
+port = 8501
+address = "0.0.0.0"
+headless = true
+enableXsrfProtection = false
+enableCORS = false
+maxUploadSize = 50
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+primaryColor = "#10B981"
+backgroundColor = "#0b1310"
+secondaryBackgroundColor = "#13231c"
+textColor = "#ecfdf5"
+font = "sans serif"
