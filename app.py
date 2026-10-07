@@ -486,7 +486,7 @@ with col_right:
         demo_cols = st.columns(4)
         sample_meta = [
             ("sample_tomato_healthy.jpg", "Tomato", "Healthy"),
-            ("sample_diseased_lemon.jpg", "Lemon", "Diseased"),
+            ("sample_tomato_blight.jpg", "Tomato", "Late Blight"),
             ("sample_potato_healthy.jpg", "Potato", "Healthy"),
             ("sample_grape_healthy.jpg", "Grape", "Healthy"),
         ]
